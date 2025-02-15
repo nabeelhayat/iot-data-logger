@@ -1,0 +1,47 @@
+services:
+  api:
+    container_name: iot-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${NODE_ENV:-development}
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/iot_data_logger
+      - PORT=4000
+      - NODE_ENV=${NODE_ENV:-development}
+      - MQTT_URL=mqtt://mosquitto:1883
+    depends_on:
+      - db
+      - mosquitto
+
+  db:
+    container_name: iot-postgres
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=iot_data_logger
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 📡 MQTT Broker (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto-broker
+    ports:
+      - "1883:1883"  # MQTT Port
+      - "9001:9001"  # WebSocket Port
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+volumes:
+  postgres_data:
