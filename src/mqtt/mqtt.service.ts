@@ -5,32 +5,64 @@ import * as mqtt from 'mqtt';
 
 @Injectable()
 export class MqttService implements OnModuleInit, OnModuleDestroy {
-  private client: ReturnType<typeof mqtt.connect>;;
-  private readonly brokerUrl = 'mqtt://mosquitto:1883';
-  private readonly topic = 'sensors/data'; 
+  private client: ReturnType<typeof mqtt.connect>;
+  private readonly brokerUrl = process.env.MQTT_URL || 'mqtt://mosquitto:1883';
+  private readonly topic = 'sensors/data';
+  private reconnectAttempts = 0;
+  private readonly maxReconnectAttempts = 5;
+  private readonly reconnectInterval = 5000; // 5 seconds
 
   constructor(private sensorDataService: SensorDataService) {}
 
-  onModuleInit() {
-    this.client = mqtt.connect(this.brokerUrl, {
-      clientId: `nest_server_${Math.random().toString(16).slice(3)}`,
-    });
+  async onModuleInit() {
+    await this.connectWithRetry();
+  }
 
-    this.client.on('connect', () => {
-      console.log('Connected to MQTT broker');
-      this.subscribe();
-    });
+  private async connectWithRetry() {
+    try {
+      this.client = mqtt.connect(this.brokerUrl, {
+        clientId: `nest_server_${Math.random().toString(16).slice(3)}`,
+        reconnectPeriod: 5000,
+        connectTimeout: 30000,
+      });
 
-    this.client.on('error', (error) => {
-      console.error('MQTT Error:', error);
-    });
+      this.client.on('connect', () => {
+        console.log('Connected to MQTT broker');
+        this.reconnectAttempts = 0;
+        this.subscribe();
+      });
 
-    this.client.on('message', this.handleMessage.bind(this));
+      this.client.on('error', (error) => {
+        console.error('MQTT Error:', error);
+        this.handleConnectionError();
+      });
+
+      this.client.on('offline', () => {
+        console.log('MQTT client went offline');
+        this.handleConnectionError();
+      });
+
+      this.client.on('message', this.handleMessage.bind(this));
+
+    } catch (error) {
+      console.error('MQTT Connection error:', error);
+      this.handleConnectionError();
+    }
+  }
+
+  private handleConnectionError() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+      setTimeout(() => this.connectWithRetry(), this.reconnectInterval);
+    } else {
+      console.error('Max reconnection attempts reached');
+    }
   }
 
   onModuleDestroy() {
     if (this.client) {
-      this.client.end();
+      this.client.end(true);
     }
   }
 
@@ -52,19 +84,24 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         temperature: message.temperature,
         humidity: message.humidity,
       };
-
-      await this.sensorDataService.create(sensorData);
-      console.log('Sensor data saved:', sensorData);
+      
+      const result = await this.sensorDataService.create(sensorData);
+      console.log('Sensor data saved:', result);
     } catch (error) {
       console.error('Error processing message:', error);
     }
   }
 
-  // Method to publish data (if needed)
-  async publish(data: any) {
+  async publish(data: any): Promise<boolean> {
     return new Promise((resolve, reject) => {
-      this.client.publish(this.topic, JSON.stringify(data), (error) => {
+      if (!this.client.connected) {
+        reject(new Error('MQTT client not connected'));
+        return;
+      }
+
+      this.client.publish(this.topic, JSON.stringify(data), { qos: 1 }, (error) => {
         if (error) {
+          console.error('Publication error:', error);
           reject(error);
         } else {
           resolve(true);

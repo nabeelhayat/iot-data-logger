@@ -1,6 +1,6 @@
 services:
   api:
-    container_name: iot-backend
+    container_name: iot-data-logger
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,15 +9,17 @@ services:
       - .:/usr/src/app
       - /usr/src/app/node_modules
     ports:
-      - "${PORT:-4000}:4000"
+      - "${PORT:-4001}:4001"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/iot_data_logger
-      - PORT=4000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/iot_data_logger_db
+      - PORT=4001
       - NODE_ENV=${NODE_ENV:-development}
       - MQTT_URL=mqtt://mosquitto:1883
     depends_on:
-      - db
-      - mosquitto
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
     networks:
       - mqtt_network
 
@@ -29,13 +31,20 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=iot_data_logger
+      - POSTGRES_DB=iot_data_logger_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      mosquitto:
+        condition: service_healthy
     networks:
       - mqtt_network
 
-  # 📡 MQTT Broker (Mosquitto)
   mosquitto:
     image: eclipse-mosquitto:2.0
     container_name: mosquitto-broker
@@ -46,6 +55,12 @@ services:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
     networks:
       - mqtt_network
 

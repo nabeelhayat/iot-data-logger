@@ -20,19 +20,20 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT || 4000, '0.0.0.0');
-  console.log('HTTP Server is running on http://localhost:4000/api');
-
-  // Create MQTT Microservice
-  const mqttApp = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
+  // Configure MQTT Microservice
+  app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.MQTT,
     options: {
-      url: 'mqtt://broker.hivemq.com',
+      url: process.env.MQTT_URL || 'mqtt://mosquitto:1883',
       clientId: 'nestjs_mqtt_client',
     },
   });
 
-  await mqttApp.listen();
+  // Start all microservices and then the main application
+  await app.startAllMicroservices();
+  await app.listen(process.env.PORT || 4001, '0.0.0.0');
+  
+  console.log('HTTP Server is running on http://localhost:4000/api');
   console.log('MQTT Microservice is running');
 }
 bootstrap();

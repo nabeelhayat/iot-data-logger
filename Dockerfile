@@ -28,12 +28,20 @@ COPY --from=deps-dev /usr/src/app/prisma ./prisma
 # Copy source code
 COPY . .
 
+RUN yarn prisma:generate
+
+# Add a script to wait for the database and run migrations
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Generate Prisma Client
-RUN npx prisma generate
+# RUN npx prisma generate
 
-EXPOSE 4000
+# EXPOSE 4000
 
-CMD ["yarn", "start:dev"]
+# CMD ["yarn", "start:dev"]
 
 # # Builder stage for production
 # FROM base AS builder
