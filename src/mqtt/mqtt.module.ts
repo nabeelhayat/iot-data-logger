@@ -7,16 +7,6 @@ import { MqttController } from './mqtt.controller';
 
 @Module({
   imports: [
-    ClientsModule.register([
-      {
-        name: 'MQTT_SERVICE',
-        transport: Transport.MQTT,
-        options: {
-          url: process.env.MQTT_URL || 'mqtt://mosquitto:1883',
-          clientId: `nest_client_${Math.random().toString(16).slice(3)}`,
-        },
-      },
-    ]),
     SensorDataModule,
   ],
   providers: [MqttService, SensorDataService],
