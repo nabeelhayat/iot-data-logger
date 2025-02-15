@@ -18,6 +18,8 @@ services:
     depends_on:
       - db
       - mosquitto
+    networks:
+      - mqtt_network
 
   db:
     container_name: iot-postgres
@@ -30,18 +32,26 @@ services:
       - POSTGRES_DB=iot_data_logger
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mqtt_network
 
   # 📡 MQTT Broker (Mosquitto)
   mosquitto:
     image: eclipse-mosquitto:2.0
     container_name: mosquitto-broker
     ports:
-      - "1883:1883"  # MQTT Port
-      - "9001:9001"  # WebSocket Port
+      - "1883:1883"
+      - "9001:9001"
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
+    networks:
+      - mqtt_network
 
 volumes:
   postgres_data:
+
+networks:
+  mqtt_network:
+    driver: bridge
