@@ -62,9 +62,6 @@ NODE_ENV=production docker-compose up -d
 
 ## Build development image
 ```bash
-docker build --target development -t iot-backend:dev .
-```
-```bash
 # Start development environment
 docker-compose up -d
 
@@ -76,11 +73,9 @@ docker-compose exec api npx prisma migrate dev
 
 # Access container shell
 docker-compose exec api sh
-```
 
-## Build production image
-```bash
-docker build --target production -t iot-backend:prod .
+# Run the start command
+yarn start:dev
 ```
 
 ## License
